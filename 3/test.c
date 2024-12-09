@@ -225,9 +225,9 @@ test_io(void)
 	unit_fail_if(fd1 == -1);
 	rc = ufs_read(fd1, buffer, sizeof(buffer));
 	unit_check(rc == (ssize_t)some_size, "read the exact data size");
-	for (size_t i = 0; i < some_size && ok; ++i) {
-		ok = ok && buffer[i] ==
-			(char)('a' + i % ('z' - 'a' + 1 + offset));
+	for (size_t i = 0; i < some_size; ++i) {
+		ok = ok && buffer[i] == (char)('a' + i % ('z' - 'a' + 1 + offset));
+      // printf("buffer_char: %c, expected_char: %c\n", buffer[i], (char)('a' + i % ('z' - 'a' + 1 + offset)));
 	}
 	unit_check(ok, "data is correct");
 	ufs_close(fd1);

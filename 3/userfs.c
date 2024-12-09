@@ -203,7 +203,10 @@ ufs_write(int fd, const char *buf, size_t size)
       ufs_error_code = UFS_ERR_NO_MEM;
       return -1;
    }
+   // printf("write_offset: %d\n", file_descriptors[real_fd]->offset);
+   // printf("write_block_number: %d\n", file_descriptors[real_fd]->block_number);
    // printf("yayaya\n");
+   printf("buffer: %s\n", buf);
    for (size_t i = 0; i < size; i++)
    {
       // if current block is full
@@ -211,6 +214,7 @@ ufs_write(int fd, const char *buf, size_t size)
       {
          file_descriptors[real_fd]->offset = 0;
          file_descriptors[real_fd]->block_number++;
+         printf("mem_prev: %s\n", file_descriptors[real_fd]->curr_block->memory);
          // if the next block is not allocated
          if (file_descriptors[real_fd]->curr_block->next == NULL) {
             file_descriptors[real_fd]->file->block_list = (struct block*) realloc(file_descriptors[real_fd]->file->block_list, sizeof(struct block) * (file_descriptors[real_fd]->block_number + 1));
@@ -228,10 +232,13 @@ ufs_write(int fd, const char *buf, size_t size)
          }
       }
       // printf("offset_write: %d\n", file_descriptors[real_fd]->offset);
-      file_descriptors[real_fd]->file->last_block->memory[file_descriptors[real_fd]->offset] = buf[i];
+      file_descriptors[real_fd]->curr_block->memory[file_descriptors[real_fd]->offset] = buf[i];
+      // printf("curr_write_char: %c, curr_mem_char: %c\n", buf[i], file_descriptors[real_fd]->file->last_block->memory[file_descriptors[real_fd]->offset]);
       // printf("curr_write: %s\n", file_descriptors[real_fd]->file->last_block->memory);
       file_descriptors[real_fd]->offset++;
-      file_descriptors[real_fd]->file->last_block->occupied++;
+      if (file_descriptors[real_fd]->curr_block->next == NULL && file_descriptors[real_fd]->offset > file_descriptors[real_fd]->curr_block->occupied) {
+         file_descriptors[real_fd]->file->last_block->occupied++;
+      }
    }
    int curr_idx = file_descriptors[real_fd]->block_number * BLOCK_SIZE + file_descriptors[real_fd]->offset;
    file_descriptors[real_fd]->file->size = (curr_idx >= file_descriptors[real_fd]->file->size ? curr_idx : file_descriptors[real_fd]->file->size);
