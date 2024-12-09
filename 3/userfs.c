@@ -53,7 +53,8 @@ struct filedesc {
 	struct file *file;
 	/* PUT HERE OTHER MEMBERS */
    struct block *curr_block;
-   int offset;
+   int offset_read;
+   int offset_write;
 };
 
 /**
@@ -140,7 +141,8 @@ ufs_open(const char *filename, int flags)
             file_list[i].refs++;
             file_descriptors[fd]->file = &file_list[i];
             file_descriptors[fd]->curr_block = file_list[i].first_block;
-            file_descriptors[fd]->offset = 0;
+            file_descriptors[fd]->offset_read = 0;
+            file_descriptors[fd]->offset_write = file_descriptors[fd]->file->last_block->occupied;
             return ++fd;
          }
       }
@@ -201,9 +203,9 @@ ufs_write(int fd, const char *buf, size_t size)
    for (size_t i = 0; i < size; i++)
    {
       // if current block is full
-      if (file_descriptors[real_fd]->offset >= BLOCK_SIZE)
+      if (file_descriptors[real_fd]->offset_write >= BLOCK_SIZE)
       {
-         file_descriptors[real_fd]->offset = 0;
+         file_descriptors[real_fd]->offset_write = 0;
          block_count++;
          file_descriptors[real_fd]->file->block_list = (struct block*) realloc(file_descriptors[real_fd]->file->block_list, sizeof(struct block) * block_count);
          struct block *b = malloc(sizeof(struct block));
@@ -212,8 +214,9 @@ ufs_write(int fd, const char *buf, size_t size)
          file_descriptors[real_fd]->file->last_block->next = b;
          file_descriptors[real_fd]->file->last_block = b;
       }
-      file_descriptors[real_fd]->file->last_block->memory[file_descriptors[fd]->offset] = buf[file_descriptors[fd]->offset];
-      file_descriptors[fd]->offset++;
+      file_descriptors[real_fd]->file->last_block->memory[file_descriptors[fd]->offset_write] = buf[file_descriptors[fd]->offset_write];
+      printf("curr_write: %s\n", file_descriptors[real_fd]->file->last_block->memory);
+      file_descriptors[fd]->offset_write++;
       file_descriptors[real_fd]->file->last_block->occupied++;
    }
    file_descriptors[real_fd]->file->size += size;
@@ -233,16 +236,20 @@ ufs_read(int fd, char *buf, size_t size)
    }
    size_t read_total = 0;
    size_t min = ((size_t) file_descriptors[real_fd]->file->size >= size ? size : (size_t) file_descriptors[real_fd]->file->size);
+   printf("min: %zu\n", min);
+   printf("mem: %s\n", file_descriptors[real_fd]->curr_block->memory);
    while (read_total < min)
    {
-      buf[read_total] = file_descriptors[real_fd]->curr_block->memory[file_descriptors[real_fd]->offset];
-      file_descriptors[real_fd]->offset++;
+      printf("offset: %d\n", file_descriptors[real_fd]->offset_read);
+      buf[read_total] = file_descriptors[real_fd]->curr_block->memory[file_descriptors[real_fd]->offset_read];
+      file_descriptors[real_fd]->offset_read++;
       read_total++;
-      if (file_descriptors[real_fd]->offset >= BLOCK_SIZE) {
+      if (file_descriptors[real_fd]->offset_read >= BLOCK_SIZE) {
          file_descriptors[real_fd]->curr_block = file_descriptors[real_fd]->curr_block->next;
-         file_descriptors[real_fd]->offset = 0;
+         file_descriptors[real_fd]->offset_read = 0;
       }
    }
+   printf("read: %s\n", buf);
 	return read_total;
 }
 
