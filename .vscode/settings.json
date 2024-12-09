@@ -6,6 +6,7 @@
       "initializer_list": "c",
       "utility": "c",
       "format": "c",
-      "span": "c"
+      "span": "c",
+      "chrono": "c"
    }
 }

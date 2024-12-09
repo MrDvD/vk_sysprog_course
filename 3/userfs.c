@@ -41,9 +41,9 @@ struct file {
 	/** Files are stored in a double-linked list. */
 	struct file *next;
 	struct file *prev;
-
 	/* PUT HERE OTHER MEMBERS */
    int size; // filesize
+   // struct block *first_block;
 };
 
 /** List of all files. */
@@ -51,8 +51,9 @@ static struct file *file_list = NULL;
 
 struct filedesc {
 	struct file *file;
-
 	/* PUT HERE OTHER MEMBERS */
+   // struct block *curr_block;
+   // int offset;
 };
 
 /**
@@ -72,11 +73,8 @@ ufs_errno()
 }
 
 int
-ufs_get_null_filedesc()
+ufs_get_free_fd()
 {
-   if (file_descriptors == NULL) {
-      return -1;
-   }
    for (unsigned long int i = 0; i < sizeof (file_descriptors) / sizeof (struct filedesc**); i++)
    {
       if (file_descriptors[i] == NULL)
@@ -90,9 +88,6 @@ ufs_get_null_filedesc()
 struct file*
 ufs_get_null_file()
 {
-   if (file_list == NULL) {
-      return NULL;
-   }
    for (unsigned int i = 0; i < sizeof (file_list) / sizeof (struct file*); i++)
    {
       if (file_list[i].refs == 0)
@@ -104,6 +99,29 @@ ufs_get_null_file()
 }
 
 int
+ufs_get_fd() {
+   file_descriptor_count++;
+   if (file_descriptors == NULL)
+   {
+      file_descriptors = malloc(sizeof(struct filedesc*));
+      struct filedesc *new_fd = malloc(sizeof(struct filedesc));
+      file_descriptors[0] = new_fd;
+      file_descriptor_capacity++;
+      return 0;
+   }
+   int fd = ufs_get_free_fd();
+   if (fd == -1)
+   {
+      fd = sizeof (file_descriptors) / sizeof (struct filedesc**);
+      file_descriptors = (struct filedesc **) realloc(file_descriptors, sizeof(struct filedesc *) * (fd + 1));
+      file_descriptor_capacity++;
+   }
+   struct filedesc *new_fd = malloc(sizeof(struct filedesc));
+   file_descriptors[fd] = new_fd;
+   return fd;
+}
+
+int
 ufs_fd_exists(int fd)
 {
    return !(fd < 0 || fd + 1 > file_descriptor_capacity || file_descriptors[fd] == NULL);
@@ -112,70 +130,43 @@ ufs_fd_exists(int fd)
 int
 ufs_open(const char *filename, int flags)
 {
-   struct filedesc fd_obj;
    if (file_list != NULL)
    {
       for (unsigned long i = 0; i < sizeof (file_list) / sizeof (struct file*); i++)
       {
-         if (strcmp((const char *) file_list[i].name, filename) == 0)
+         if (file_list[i].name != NULL && strcmp((const char *) file_list[i].name, filename) == 0)
          {
-            int fd = ufs_get_null_filedesc();
-            fd_obj.file = &file_list[i];
-            if (fd == -1) {
-               fd = sizeof (file_descriptors) / sizeof (struct filedesc**);
-               if (file_descriptors == NULL)
-               {
-                  fd--;
-               }
-               file_descriptors = (struct filedesc **) realloc(file_descriptors, sizeof(struct filedesc *) * (fd + 1));
-               file_descriptors[fd] = &fd_obj;
-               file_descriptor_capacity++;
-            } else {
-               file_descriptors[fd] = &fd_obj;
-            }
-            printf("!!! [well, this line is necessary for working]\n");
-            file_descriptor_count++;
+            int fd = ufs_get_fd();
+            file_list[i].refs++;
+            file_descriptors[fd]->file = &file_list[i];
+            // fd_obj.offset = 0;
             return ++fd;
          }
       }
    }
    if (flags & 0x1)
    {
+      if (file_list == NULL) {
+         file_list = malloc(sizeof(struct file));
+         struct file *new_f = malloc(sizeof(struct file));
+         new_f->refs = 0;
+         file_list[0] = *new_f;
+      }
       struct file *f = ufs_get_null_file();
-      struct file new_f;
-      if (f == NULL) {
-         f = &new_f;
+      if (f == NULL)
+      {
+         f = malloc(sizeof(struct file));
          int list_size = sizeof (file_list) / sizeof (struct file*);
-         if (file_list == NULL)
-         {
-            list_size--;
-         }
-         f->refs++;
-         f->name = (char *) filename;
          file_list = (struct file*) realloc(file_list, sizeof(struct file) * (list_size + 1));
          file_list[list_size] = *f;
-      } else {
-         f->refs++;
-         f->name = (char *) filename;
       }
-      int fd = ufs_get_null_filedesc();
-      if (fd == -1) {
-         fd = sizeof (file_descriptors) / sizeof (struct filedesc**);
-         if (file_descriptors == NULL)
-         {
-            fd--;
-         }
-         file_descriptors = (struct filedesc **) realloc(file_descriptors, sizeof(struct filedesc *) * (fd + 1));
-         file_descriptors[fd] = &fd_obj;
-         file_descriptor_capacity++;
-      } else
-      {
-         file_descriptors[fd] = &fd_obj;
-      }
+      f->name = (char *) filename;
+      f->refs++;
+      int fd = ufs_get_fd();
       file_descriptors[fd]->file = f;
+      file_descriptor_capacity++;
       file_descriptor_count++;
       return ++fd;
-
    } else
    {
       ufs_error_code = UFS_ERR_NO_FILE;
@@ -187,11 +178,13 @@ ssize_t
 ufs_write(int fd, const char *buf, size_t size)
 {
    int real_fd = fd - 1;
-   if (!ufs_fd_exists(real_fd)) {
+   if (!ufs_fd_exists(real_fd))
+   {
       ufs_error_code = UFS_ERR_NO_FILE;
 	   return -1;
    }
-   if (file_descriptors[real_fd]->file->size + size > MAX_FILE_SIZE) {
+   if (file_descriptors[real_fd]->file->size + size > MAX_FILE_SIZE)
+   {
       ufs_error_code = UFS_ERR_NO_MEM;
       return -1;
    }
@@ -229,12 +222,28 @@ ufs_write(int fd, const char *buf, size_t size)
 ssize_t
 ufs_read(int fd, char *buf, size_t size)
 {
-	/* IMPLEMENT THIS FUNCTION */
-	(void)fd;
-	(void)buf;
-	(void)size;
-	ufs_error_code = UFS_ERR_NOT_IMPLEMENTED;
-	return -1;
+   (void)buf;
+   (void)size;
+   int real_fd = fd - 1;
+   if (!ufs_fd_exists(real_fd))
+   {
+      ufs_error_code = UFS_ERR_NO_FILE;
+	   return -1;
+   }
+   return -1;
+   // size_t read_total = 0;
+   // size_t min = ((size_t) file_descriptors[real_fd]->file->size >= size ? size : (size_t) file_descriptors[real_fd]->file->size);
+   // while (read_total < min)
+   // {
+   //    buf[read_total] = file_descriptors[real_fd]->curr_block->memory[file_descriptors[real_fd]->offset];
+   //    file_descriptors[real_fd]->offset++;
+   //    read_total++;
+   //    if (file_descriptors[real_fd]->offset >= BLOCK_SIZE) {
+   //       file_descriptors[real_fd]->curr_block = file_descriptors[real_fd]->curr_block->next;
+   //       file_descriptors[real_fd]->offset = 0;
+   //    }
+   // }
+	// return read_total;
 }
 
 int
@@ -254,13 +263,13 @@ ufs_close(int fd)
 int
 ufs_delete(const char *filename)
 {
-	struct file new_file; 
-   new_file.refs = 0;
+	struct file *new_file = malloc(sizeof(struct file)); 
+   new_file->refs = 0;
    for (unsigned long i = 0; i < sizeof (file_list) / sizeof (struct file*); i++)
    {
       if (strcmp((const char *) file_list[i].name, filename) == 0)
       {
-         file_list[i] = new_file;
+         file_list[i] = *new_file;
          return 0;
       }
    }
