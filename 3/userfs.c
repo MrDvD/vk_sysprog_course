@@ -203,7 +203,6 @@ ufs_write(int fd, const char *buf, size_t size)
       ufs_error_code = UFS_ERR_NO_MEM;
       return -1;
    }
-   int block_count = sizeof(file_descriptors[real_fd]->file->block_list) / sizeof(struct block*);
    // printf("yayaya\n");
    for (size_t i = 0; i < size; i++)
    {
@@ -212,13 +211,17 @@ ufs_write(int fd, const char *buf, size_t size)
       {
          file_descriptors[real_fd]->offset = 0;
          file_descriptors[real_fd]->block_number++;
-         block_count++;
-         file_descriptors[real_fd]->file->block_list = (struct block*) realloc(file_descriptors[real_fd]->file->block_list, sizeof(struct block) * block_count);
-         struct block *b = malloc(sizeof(struct block));
-         b->memory = (char *) malloc(BLOCK_SIZE);
-         b->prev = file_descriptors[real_fd]->file->last_block; 
-         file_descriptors[real_fd]->file->last_block->next = b;
-         file_descriptors[real_fd]->file->last_block = b;
+         // if the next block is not allocated
+         if (file_descriptors[real_fd]->curr_block->next == NULL) {
+            file_descriptors[real_fd]->file->block_list = (struct block*) realloc(file_descriptors[real_fd]->file->block_list, sizeof(struct block) * (file_descriptors[real_fd]->block_number + 1));
+            struct block *b = malloc(sizeof(struct block));
+            b->memory = (char *) malloc(BLOCK_SIZE);
+            b->prev = file_descriptors[real_fd]->file->last_block; 
+            file_descriptors[real_fd]->file->last_block->next = b;
+            file_descriptors[real_fd]->file->last_block = b;
+         } else {
+            file_descriptors[real_fd]->curr_block = file_descriptors[real_fd]->curr_block->next;
+         }
       }
       // printf("offset_write: %d\n", file_descriptors[real_fd]->offset);
       file_descriptors[real_fd]->file->last_block->memory[file_descriptors[real_fd]->offset] = buf[i];
@@ -228,7 +231,8 @@ ufs_write(int fd, const char *buf, size_t size)
    }
    int curr_idx = file_descriptors[real_fd]->block_number * BLOCK_SIZE + file_descriptors[real_fd]->offset;
    file_descriptors[real_fd]->file->size = (curr_idx >= file_descriptors[real_fd]->file->size ? curr_idx : file_descriptors[real_fd]->file->size);
-   // printf("curr_size_after_write: %d\n", file_descriptors[real_fd]->file->size);
+   printf("total: %s|<--- END\n", file_descriptors[real_fd]->curr_block->memory);
+   printf("curr_size_after_write: %d\n", file_descriptors[real_fd]->file->size);
    return size;
 }
 
@@ -246,25 +250,33 @@ ufs_read(int fd, char *buf, size_t size)
    size_t i = file_descriptors[real_fd]->block_number * BLOCK_SIZE + file_descriptors[real_fd]->offset;
    size_t start = i;
    size_t min = ((size_t) file_descriptors[real_fd]->file->size >= size + i ? size + i : (size_t) file_descriptors[real_fd]->file->size);
-   // printf("min: %zu\n", min);
-   // printf("mem: %s\n", file_descriptors[real_fd]->curr_block->memory);
+   printf("size: %zu\n", size);
+   printf("min: %zu, start: %zu\n", min, start);
+   printf("mem: %s\n", file_descriptors[real_fd]->curr_block->memory);
    while (i < min)
    {
-      // printf("offset: %d\n", file_descriptors[real_fd]->offset);
-      // printf("i: %zu\n", i);
-      // printf("start: %zu\n", start);
-      // printf("diff: %zu\n", i - start);
+      printf("offset: %d\n", file_descriptors[real_fd]->offset);
+      printf("i: %zu\n", i);
+      printf("start: %zu\n", start);
+      printf("diff: %zu\n", i - start);
       buf[i - start] = file_descriptors[real_fd]->curr_block->memory[file_descriptors[real_fd]->offset];
       file_descriptors[real_fd]->offset++;
       i++;
       if (file_descriptors[real_fd]->offset >= BLOCK_SIZE) {
+         printf("here\n");
          file_descriptors[real_fd]->curr_block = file_descriptors[real_fd]->curr_block->next;
+         printf("there\n");
          file_descriptors[real_fd]->block_number++;
+         printf("ttt\n");
          file_descriptors[real_fd]->offset = 0;
+         printf("sss\n");
+         printf("i: %zu\n", i);
+         printf("min: %zu\n", min);
       }
    }
-   printf("read: %s\n", buf);
-   // printf("total: %zu\n", read_total);
+   printf("kkkkkk\n");
+   // printf("read: %s\n", buf);
+   // printf("total: %zu\n", min - start);
 	return min - start;
 }
 
