@@ -1,5 +1,11 @@
 {
    "files.associations": {
-      "cstdlib": "c"
+      "cstdlib": "c",
+      "array": "c",
+      "string_view": "c",
+      "initializer_list": "c",
+      "utility": "c",
+      "format": "c",
+      "span": "c"
    }
 }

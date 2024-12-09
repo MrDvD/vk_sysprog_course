@@ -43,6 +43,7 @@ struct file {
 	struct file *prev;
 
 	/* PUT HERE OTHER MEMBERS */
+   int size; // filesize
 };
 
 /** List of all files. */
@@ -103,6 +104,12 @@ ufs_get_null_file()
 }
 
 int
+ufs_fd_exists(int fd)
+{
+   return !(fd < 0 || fd + 1 > file_descriptor_capacity || file_descriptors[fd] == NULL);
+}
+
+int
 ufs_open(const char *filename, int flags)
 {
    struct filedesc fd_obj;
@@ -152,10 +159,8 @@ ufs_open(const char *filename, int flags)
          f->name = (char *) filename;
       }
       int fd = ufs_get_null_filedesc();
-      printf("here: %d\n", fd);
       if (fd == -1) {
          fd = sizeof (file_descriptors) / sizeof (struct filedesc**);
-         printf("there: %d\n", fd);
          if (file_descriptors == NULL)
          {
             fd--;
@@ -181,12 +186,44 @@ ufs_open(const char *filename, int flags)
 ssize_t
 ufs_write(int fd, const char *buf, size_t size)
 {
-	/* IMPLEMENT THIS FUNCTION */
-	(void)fd;
-	(void)buf;
-	(void)size;
-	ufs_error_code = UFS_ERR_NOT_IMPLEMENTED;
-	return -1;
+   int real_fd = fd - 1;
+   if (!ufs_fd_exists(real_fd)) {
+      ufs_error_code = UFS_ERR_NO_FILE;
+	   return -1;
+   }
+   if (file_descriptors[real_fd]->file->size + size > MAX_FILE_SIZE) {
+      ufs_error_code = UFS_ERR_NO_MEM;
+      return -1;
+   }
+   int last = sizeof(file_descriptors[real_fd]->file->block_list) / sizeof(struct block*);
+   // if file had no data
+   if (file_descriptors[real_fd]->file->block_list == NULL)
+   {
+      file_descriptors[real_fd]->file->block_list = (struct block*) malloc(sizeof(struct block));
+      struct block b;
+      b.memory = (char *) malloc(BLOCK_SIZE);
+      file_descriptors[real_fd]->file->block_list[last] = b;
+   }
+   int j = file_descriptors[real_fd]->file->block_list->occupied;
+   for (size_t i = 0; i < size; i++)
+   {
+      // if current block is full
+      if (j >= BLOCK_SIZE)
+      {
+         last++; j = 0;
+         file_descriptors[real_fd]->file->block_list = (struct block*) realloc(file_descriptors[real_fd]->file->block_list, sizeof(struct block) * last);
+         struct block b;
+         b.memory = (char *) malloc(BLOCK_SIZE);
+         b.prev = &file_descriptors[real_fd]->file->block_list[last - 1]; 
+         file_descriptors[real_fd]->file->block_list[last] = b;
+         file_descriptors[real_fd]->file->block_list[last - 1].next = &b;
+      }
+      file_descriptors[real_fd]->file->block_list[last].memory[j] = buf[j];
+      file_descriptors[real_fd]->file->block_list[last].occupied++;
+      j++;
+   }
+   file_descriptors[real_fd]->file->size += size;
+   return size;
 }
 
 ssize_t
@@ -203,9 +240,8 @@ ufs_read(int fd, char *buf, size_t size)
 int
 ufs_close(int fd)
 {
-   printf("%d\n", fd);
    int real_fd = fd - 1;
-   if (fd < 1 || fd > file_descriptor_capacity || file_descriptors[real_fd] == NULL) {
+   if (!ufs_fd_exists(real_fd)) {
       ufs_error_code = UFS_ERR_NO_FILE;
 	   return -1;
    }
