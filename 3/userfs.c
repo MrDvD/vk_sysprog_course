@@ -166,7 +166,7 @@ ufs_open(const char *filename, int flags)
       if (file_list == NULL) {
          file_list = malloc(sizeof(struct file));
          struct file *new_f = malloc(sizeof(struct file));
-         // new_f->refs = 0;
+         new_f->size = 0;
          file_list[0] = *new_f;
          get_file_capacity(1);
       }
@@ -191,6 +191,7 @@ ufs_open(const char *filename, int flags)
       file_list[file_idx].block_list[0] = *b;
       file_list[file_idx].first_block = b;
       file_list[file_idx].last_block = b;
+      file_list[file_idx].size = 0;
       // filling a new fd
       int fd = ufs_get_fd();
       file_descriptors[fd]->file = &file_list[file_idx];
@@ -259,8 +260,6 @@ ufs_read(int fd, char *buf, size_t size)
       ufs_error_code = UFS_ERR_NO_FILE;
 	   return -1;
    }
-   printf("file_count: %d\n", get_file_capacity(0));
-   printf("fd_count: %d\n", file_descriptor_capacity);
    size_t i = file_descriptors[real_fd]->block_number * BLOCK_SIZE + file_descriptors[real_fd]->offset;
    size_t start = i;
    size_t min = ((size_t) file_descriptors[real_fd]->file->size >= size + i ? size + i : (size_t) file_descriptors[real_fd]->file->size);
