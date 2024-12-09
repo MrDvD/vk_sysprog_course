@@ -42,7 +42,7 @@ struct file {
 	struct file *next;
 	struct file *prev;
 	/* PUT HERE OTHER MEMBERS */
-   int size; // filesize
+   int size;
    struct block *first_block;
 };
 
@@ -74,9 +74,19 @@ ufs_errno()
 }
 
 int
+get_file_capacity(int inc)
+{
+   static int file_count;
+   if (inc) {
+      file_count++;
+   }
+   return file_count;
+}
+
+int
 ufs_get_free_fd()
 {
-   for (unsigned long int i = 0; i < sizeof (file_descriptors) / sizeof (struct filedesc**); i++)
+   for (int i = 0; i < file_descriptor_capacity; i++)
    {
       if (file_descriptors[i] == NULL)
       {
@@ -86,17 +96,17 @@ ufs_get_free_fd()
    return -1;
 }
 
-struct file*
-ufs_get_null_file()
+int
+ufs_get_null_file_idx()
 {
-   for (unsigned int i = 0; i < sizeof (file_list) / sizeof (struct file*); i++)
+   for (int i = 0; i < get_file_capacity(0); i++)
    {
       if (file_list[i].name == NULL)
       {
-         return &file_list[i];
+         return i;
       }
    }
-   return NULL;
+   return -1;
 }
 
 int
@@ -133,7 +143,7 @@ ufs_open(const char *filename, int flags)
 {
    if (file_list != NULL)
    {
-      for (unsigned long i = 0; i < sizeof (file_list) / sizeof (struct file*); i++)
+      for (int i = 0; i < get_file_capacity(0); i++)
       {
          if (file_list[i].name != NULL && strcmp((const char *) file_list[i].name, filename) == 0)
          {
@@ -151,31 +161,44 @@ ufs_open(const char *filename, int flags)
    if (flags & 0x1)
    {
       // creating a new file
+      printf("creating a new file: %s\n", filename);
       if (file_list == NULL) {
          file_list = malloc(sizeof(struct file));
          struct file *new_f = malloc(sizeof(struct file));
          new_f->refs = 0;
          file_list[0] = *new_f;
+         get_file_capacity(1);
       }
-      struct file *f = ufs_get_null_file();
-      if (f == NULL)
+      int file_idx = ufs_get_null_file_idx();
+      if (file_idx == -1)
       {
-         f = malloc(sizeof(struct file));
-         int list_size = sizeof (file_list) / sizeof (struct file*);
-         file_list = (struct file*) realloc(file_list, sizeof(struct file) * (list_size + 1));
-         file_list[list_size] = *f;
+         printf("file_count_before: %d\n", get_file_capacity(0));
+         struct file *f = malloc(sizeof(struct file));
+         file_idx = get_file_capacity(0);
+         
+         // temporarily added +1 at the end
+         file_list = (struct file*) realloc(file_list, sizeof(struct file) * get_file_capacity(1));
+         printf("file_list_length_after: %d\n", get_file_capacity(0));
+         file_list[file_idx] = *f;
       }
-      f->name = (char *) filename;
-      f->refs++; 
-      f->block_list = malloc(sizeof(struct block));
+      // filling a new file
+      file_list[file_idx].name = (char *) filename;
+      printf("%s\n", file_list[file_idx].name);
+      file_list[file_idx].refs++; 
+      file_list[file_idx].block_list = malloc(sizeof(struct block));
+      printf("asdasd\n");
       struct block *b = malloc(sizeof(struct block));
+      printf("asdasd\n");
       b->memory = (char*) malloc(BLOCK_SIZE);
-      f->block_list[0] = *b;
-      f->first_block = b;
-      f->last_block = b;
+      printf("asdasd\n");
+      file_list[file_idx].block_list[0] = *b;
+      file_list[file_idx].first_block = b;
+      file_list[file_idx].last_block = b;
+      printf("file_name: %s, file_idx: %d\n", file_list[file_idx].name, file_idx);
+      // printf("file_list_length_after: %ld\n", sizeof (file_list) / sizeof (struct file*));
       // filling a new fd
       int fd = ufs_get_fd();
-      file_descriptors[fd]->file = f;
+      file_descriptors[fd]->file = &file_list[file_idx];
       file_descriptors[fd]->curr_block = file_descriptors[fd]->file->first_block;
       file_descriptors[fd]->block_number = 0;
       file_descriptors[fd]->offset = 0;
@@ -199,7 +222,6 @@ ufs_write(int fd, const char *buf, size_t size)
    if (file_descriptors[real_fd]->file->size + size > MAX_FILE_SIZE)
    {
       ufs_error_code = UFS_ERR_NO_MEM;
-      printf("2.\n");
       return -1;
    }
    for (size_t i = 0; i < size; i++)
@@ -276,16 +298,20 @@ ufs_close(int fd)
 int
 ufs_delete(const char *filename)
 {
-	struct file *new_file = malloc(sizeof(struct file)); 
+	struct file *new_file = malloc(sizeof(struct file));
    new_file->refs = 0;
-   for (unsigned long i = 0; i < sizeof (file_list) / sizeof (struct file*); i++)
+   for (int i = 0; i < get_file_capacity(0); i++)
    {
-      if (strcmp((const char *) file_list[i].name, filename) == 0)
+      printf("curr_idx: %d\n", i);
+      if (file_list[i].name != NULL && strcmp((const char *) file_list[i].name, filename) == 0)
       {
+         printf("deleted file successfully: %s\n", filename);
          file_list[i] = *new_file;
+         printf("name_null? %d\n", file_list[i].name == NULL);
          return 0;
       }
    }
+   printf("no such file with name: %s\n", filename);
    ufs_error_code = UFS_ERR_NO_FILE;
 	return -1;
 }

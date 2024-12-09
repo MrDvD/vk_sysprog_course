@@ -252,7 +252,6 @@ test_delete(void)
 		   "delete when opened descriptors exist");
 
 	int tmp = ufs_open("tmp", UFS_CREATE);
-   printf("fds: %d %d %d %d\n", fd1, fd2, fd3, tmp);
 	unit_fail_if(tmp == -1);
 	unit_fail_if(ufs_write(tmp, "hhhhh", 5) != 5);
 	ufs_close(tmp);
