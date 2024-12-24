@@ -275,7 +275,18 @@ ufs_close(int fd)
 int
 ufs_delete(const char *filename)
 {
-	struct file *curr_file = &file_list[0];
+   // if it's the first file
+   if (strcmp((const char *) file_list[0].name, filename) == 0)
+   {
+      if (file_list[0].next != NULL) {
+         file_list[0] = *file_list[0].next;
+      } else {
+         file_list = NULL;
+      }
+      return 0;
+   }
+   // otherwise
+   struct file *curr_file = &file_list[0];
    while (1)
    {
       if (strcmp((const char *) curr_file->name, filename) == 0)
