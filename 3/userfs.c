@@ -74,16 +74,6 @@ ufs_errno()
 }
 
 int
-get_file_capacity(int inc)
-{
-   static int file_count;
-   if (inc) {
-      file_count++;
-   }
-   return file_count;
-}
-
-int
 ufs_get_free_fd()
 {
    for (int i = 0; i < file_descriptor_capacity; i++)
@@ -96,17 +86,14 @@ ufs_get_free_fd()
    return -1;
 }
 
-int
-ufs_get_null_file_idx()
+struct file*
+ufs_get_last_file()
 {
-   for (int i = 0; i < get_file_capacity(0); i++)
-   {
-      if (file_list[i].name == NULL)
-      {
-         return i;
-      }
+   struct file *curr_file = &file_list[0];
+   while (curr_file->next != NULL) {
+      curr_file = curr_file->next;
    }
-   return -1;
+   return curr_file;
 }
 
 int
@@ -143,58 +130,52 @@ ufs_open(const char *filename, int flags)
 {
    if (file_list != NULL)
    {
-      if (file_list[0].name != NULL) {
-      }
-      for (int i = 0; i < get_file_capacity(0); i++)
+      struct file curr_file = file_list[0];
+      while (1)
       {
-         if (file_list[i].name != NULL && strcmp((const char *) file_list[i].name, filename) == 0)
+         if (strcmp((const char *) curr_file.name, filename) == 0)
          {
             // filling a new fd
             int fd = ufs_get_fd();
-            file_list[i].refs++;
-            file_descriptors[fd]->file = &file_list[i];
-            file_descriptors[fd]->curr_block = file_list[i].first_block;
+            curr_file.refs++;
+            file_descriptors[fd]->file = &curr_file;
+            file_descriptors[fd]->curr_block = curr_file.first_block;
             file_descriptors[fd]->block_number = 0;
             file_descriptors[fd]->offset = 0;
             return ++fd;
          }
+         if (curr_file.next == NULL)
+            break;
+         curr_file = *curr_file.next;
       }
    }
    if (flags & 0x1)
    {
       // creating a new file
+      struct file* new_file;
       if (file_list == NULL) {
          file_list = malloc(sizeof(struct file));
-         struct file *new_f = malloc(sizeof(struct file));
-         new_f->size = 0;
-         file_list[0] = *new_f;
-         get_file_capacity(1);
-      }
-      int file_idx = ufs_get_null_file_idx();
-      if (file_idx == -1)
-      {
-         struct file *f = malloc(sizeof(struct file));
-         file_idx = get_file_capacity(0);
-         
-         // temporarily added +1 at the end
-         file_list = (struct file*) realloc(file_list, sizeof(struct file) * get_file_capacity(1));
-         file_list[file_idx] = *f;
+         new_file = &file_list[0];
+      } else {
+         struct file *last_file = ufs_get_last_file();
+         new_file = malloc(sizeof(struct file));
+         last_file->next = new_file;
       }
       // filling a new file
-      char * name_copy = malloc(sizeof(filename));
+      char *name_copy = malloc(sizeof(filename));
       strcpy(name_copy, filename);
-      file_list[file_idx].name = name_copy;
-      file_list[file_idx].refs++; 
-      file_list[file_idx].block_list = malloc(sizeof(struct block));
+      new_file->name = name_copy;
+      new_file->refs++; 
+      new_file->block_list = malloc(sizeof(struct block));
       struct block *b = malloc(sizeof(struct block));
       b->memory = (char*) malloc(BLOCK_SIZE);
-      file_list[file_idx].block_list[0] = *b;
-      file_list[file_idx].first_block = b;
-      file_list[file_idx].last_block = b;
-      file_list[file_idx].size = 0;
+      new_file->block_list[0] = *b;
+      new_file->first_block = b;
+      new_file->last_block = b;
+      new_file->size = 0;
       // filling a new fd
       int fd = ufs_get_fd();
-      file_descriptors[fd]->file = &file_list[file_idx];
+      file_descriptors[fd]->file = new_file;
       file_descriptors[fd]->curr_block = file_descriptors[fd]->file->first_block;
       file_descriptors[fd]->block_number = 0;
       file_descriptors[fd]->offset = 0;
@@ -294,15 +275,20 @@ ufs_close(int fd)
 int
 ufs_delete(const char *filename)
 {
-	struct file *new_file = malloc(sizeof(struct file));
-   new_file->refs = 0;
-   for (int i = 0; i < get_file_capacity(0); i++)
+	struct file *curr_file = &file_list[0];
+   while (1)
    {
-      if (file_list[i].name != NULL && strcmp((const char *) file_list[i].name, filename) == 0)
+      if (strcmp((const char *) curr_file->name, filename) == 0)
       {
-         file_list[i] = *new_file;
+         if (curr_file->prev != NULL)
+            curr_file->prev->next = curr_file->next;
+         if (curr_file->next != NULL)
+            curr_file->next->prev = curr_file->prev;
          return 0;
       }
+      if (curr_file->next == NULL)
+         break;
+      curr_file = curr_file->next;
    }
    ufs_error_code = UFS_ERR_NO_FILE;
 	return -1;
