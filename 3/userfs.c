@@ -130,23 +130,23 @@ ufs_open(const char *filename, int flags)
 {
    if (file_list != NULL)
    {
-      struct file curr_file = file_list[0];
+      struct file *curr_file = &file_list[0];
       while (1)
       {
-         if (strcmp((const char *) curr_file.name, filename) == 0)
+         if (strcmp((const char *) curr_file->name, filename) == 0)
          {
             // filling a new fd
             int fd = ufs_get_fd();
-            curr_file.refs++;
-            file_descriptors[fd]->file = &curr_file;
-            file_descriptors[fd]->curr_block = curr_file.first_block;
+            curr_file->refs++;
+            file_descriptors[fd]->file = curr_file;
+            file_descriptors[fd]->curr_block = curr_file->first_block;
             file_descriptors[fd]->block_number = 0;
             file_descriptors[fd]->offset = 0;
             return ++fd;
          }
-         if (curr_file.next == NULL)
+         if (curr_file->next == NULL)
             break;
-         curr_file = *curr_file.next;
+         curr_file = curr_file->next;
       }
    }
    if (flags & 0x1)
