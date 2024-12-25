@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <stdio.h> // to remove
+// #include <stdio.h> // to remove
 
 enum {
 	BLOCK_SIZE = 512,

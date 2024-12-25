@@ -1,0 +1,1 @@
+propably when removing a file i should free() the allocated memory
