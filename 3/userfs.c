@@ -156,11 +156,14 @@ ufs_open(const char *filename, int flags)
       if (file_list == NULL) {
          file_list = malloc(sizeof(struct file));
          new_file = &file_list[0];
+         new_file->prev = NULL;
       } else {
          struct file *last_file = ufs_get_last_file();
          new_file = malloc(sizeof(struct file));
+         new_file->prev = last_file;
          last_file->next = new_file;
       }
+      new_file->next = NULL;
       // filling a new file
       char *name_copy = malloc(sizeof(filename));
       strcpy(name_copy, filename);
@@ -179,7 +182,7 @@ ufs_open(const char *filename, int flags)
       file_descriptors[fd]->curr_block = file_descriptors[fd]->file->first_block;
       file_descriptors[fd]->block_number = 0;
       file_descriptors[fd]->offset = 0;
-      return ++fd;
+      return fd + 1;
    } else
    {
       ufs_error_code = UFS_ERR_NO_FILE;
@@ -212,7 +215,7 @@ ufs_write(int fd, const char *buf, size_t size)
          if (file_descriptors[real_fd]->curr_block->next == NULL) {
             file_descriptors[real_fd]->file->block_list = (struct block*) realloc(file_descriptors[real_fd]->file->block_list, sizeof(struct block) * (file_descriptors[real_fd]->block_number + 1));
             struct block *b = malloc(sizeof(struct block));
-            b->memory = (char *) malloc(BLOCK_SIZE);
+            b->memory = malloc(BLOCK_SIZE);
             b->prev = file_descriptors[real_fd]->file->last_block;
             file_descriptors[real_fd]->file->last_block->next = b;
             file_descriptors[real_fd]->file->last_block = b;
@@ -262,7 +265,8 @@ int
 ufs_close(int fd)
 {
    int real_fd = fd - 1;
-   if (!ufs_fd_exists(real_fd)) {
+   if (!ufs_fd_exists(real_fd))
+   {
       ufs_error_code = UFS_ERR_NO_FILE;
 	   return -1;
    }
@@ -275,31 +279,34 @@ ufs_close(int fd)
 int
 ufs_delete(const char *filename)
 {
-   // if it's the first file
-   if (strcmp((const char *) file_list[0].name, filename) == 0)
+   if (file_list != NULL)
    {
-      if (file_list[0].next != NULL) {
-         file_list[0] = *file_list[0].next;
-      } else {
-         file_list = NULL;
-      }
-      return 0;
-   }
-   // otherwise
-   struct file *curr_file = &file_list[0];
-   while (1)
-   {
-      if (strcmp((const char *) curr_file->name, filename) == 0)
+      // if it's the first file
+      if (strcmp((const char *) file_list[0].name, filename) == 0)
       {
-         if (curr_file->prev != NULL)
-            curr_file->prev->next = curr_file->next;
-         if (curr_file->next != NULL)
-            curr_file->next->prev = curr_file->prev;
+         if (file_list[0].next != NULL) {
+            file_list[0] = *file_list[0].next;
+         } else {
+            file_list = NULL;
+         }
          return 0;
       }
-      if (curr_file->next == NULL)
-         break;
-      curr_file = curr_file->next;
+      // otherwise
+      struct file *curr_file = &file_list[0];
+      while (1)
+      {
+         if (strcmp((const char *) curr_file->name, filename) == 0)
+         {
+            if (curr_file->prev != NULL)
+               curr_file->prev->next = curr_file->next;
+            if (curr_file->next != NULL)
+               curr_file->next->prev = curr_file->prev;
+            return 0;
+         }
+         if (curr_file->next == NULL)
+            break;
+         curr_file = curr_file->next;
+      }
    }
    ufs_error_code = UFS_ERR_NO_FILE;
 	return -1;
