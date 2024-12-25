@@ -42,7 +42,7 @@ test_stress_open(void)
 {
 	unit_test_start();
 
-	const int count = 100;
+	const int count = 1000;
 	int fd[count][2];
 	char name[16], buf[16];
 	unit_msg("open %d read and write descriptors, fill with data", count);

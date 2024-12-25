@@ -22,7 +22,6 @@ struct block {
 	struct block *next;
 	/** Previous block in the file. */
 	struct block *prev;
-
 	/* PUT HERE OTHER MEMBERS */
 };
 
@@ -96,14 +95,36 @@ ufs_get_last_file()
    return curr_file;
 }
 
+/* Returns a pointer to the new empty block */
+struct block*
+ufs_init_block()
+{
+   struct block *new_block = malloc(sizeof(struct block));
+   new_block->memory = malloc(BLOCK_SIZE);
+   new_block->occupied = 0;
+   new_block->next = NULL;
+   new_block->prev = NULL;
+   return new_block;
+}
+
+/* Returns a pointer to the new fd */
+struct filedesc*
+ufs_init_fd()
+{
+   struct filedesc *new_fd = malloc(sizeof(struct filedesc));
+   new_fd->curr_block = 0;
+   new_fd->offset = 0;
+   return new_fd;
+}
+
+/* Returns a pointer to the free & usable fd */
 int
 ufs_get_fd() {
    file_descriptor_count++;
    if (file_descriptors == NULL)
    {
       file_descriptors = malloc(sizeof(struct filedesc*));
-      struct filedesc *new_fd = malloc(sizeof(struct filedesc));
-      file_descriptors[0] = new_fd;
+      file_descriptors[0] = ufs_init_fd();
       file_descriptor_capacity++;
       return 0;
    }
@@ -114,8 +135,7 @@ ufs_get_fd() {
       file_descriptors = (struct filedesc **) realloc(file_descriptors, sizeof(struct filedesc *) * (fd + 1));
       file_descriptor_capacity++;
    }
-   struct filedesc *new_fd = malloc(sizeof(struct filedesc));
-   file_descriptors[fd] = new_fd;
+   file_descriptors[fd] = ufs_init_fd();
    return fd;
 }
 
@@ -213,19 +233,16 @@ ufs_write(int fd, const char *buf, size_t size)
          file_descriptors[real_fd]->block_number++;
          // if the next block is not allocated
          if (file_descriptors[real_fd]->curr_block->next == NULL) {
-            file_descriptors[real_fd]->file->block_list = (struct block*) realloc(file_descriptors[real_fd]->file->block_list, sizeof(struct block) * (file_descriptors[real_fd]->block_number + 1));
-            struct block *b = malloc(sizeof(struct block));
-            b->memory = malloc(BLOCK_SIZE);
-            b->prev = file_descriptors[real_fd]->file->last_block;
-            file_descriptors[real_fd]->file->last_block->next = b;
-            file_descriptors[real_fd]->file->last_block = b;
-            file_descriptors[real_fd]->curr_block = file_descriptors[real_fd]->file->last_block;
-         } else {
-            file_descriptors[real_fd]->curr_block = file_descriptors[real_fd]->curr_block->next;
+            struct block *new_block = ufs_init_block();
+            new_block->prev = file_descriptors[real_fd]->file->last_block;
+            file_descriptors[real_fd]->file->last_block->next = new_block;
+            file_descriptors[real_fd]->file->last_block = new_block;
          }
+         file_descriptors[real_fd]->curr_block = file_descriptors[real_fd]->curr_block->next;
       }
       file_descriptors[real_fd]->curr_block->memory[file_descriptors[real_fd]->offset] = buf[i];
       file_descriptors[real_fd]->offset++;
+      // increment occupied
       if (file_descriptors[real_fd]->curr_block->next == NULL && file_descriptors[real_fd]->offset > file_descriptors[real_fd]->curr_block->occupied) {
          file_descriptors[real_fd]->file->last_block->occupied++;
       }
