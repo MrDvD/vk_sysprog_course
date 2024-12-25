@@ -219,7 +219,7 @@ ufs_write(int fd, const char *buf, size_t size)
       ufs_error_code = UFS_ERR_NO_FILE;
 	   return -1;
    }
-   if (file_descriptors[real_fd]->file->size + size > MAX_FILE_SIZE)
+   if (file_descriptors[real_fd]->block_number * BLOCK_SIZE + file_descriptors[real_fd]->offset + size > MAX_FILE_SIZE)
    {
       ufs_error_code = UFS_ERR_NO_MEM;
       return -1;
