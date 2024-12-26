@@ -15,7 +15,7 @@ normalize_args(char *cmd, char **args, int args_len)
    new_arr[0] = cmd;
    for (int i = 1; i <= args_len; i++)
       new_arr[i] = args[i - 1];
-   new_arr[args_len + 1] = NULL;
+   new_arr[args_len + 1] = (char*) NULL;
    return new_arr;
 }
 
@@ -45,35 +45,26 @@ execute_command_line(const struct command_line *line)
             {
                if (pipe_status == 1) // now &1 points to fd[1]
                {
+                  close(fd[0]);
                   dup2(fd[1], 1);
                   // close(1);
                   // dup(fd[1]);
-                  close(fd[0]);
+                  close(fd[1]);
                }
                else if (pipe_status == 2) // need to point fd[0] to &0
                {
+                  close(fd[1]);
                   dup2(fd[0], 0);
                   // close(0);
                   // dup(fd[0]);
-                  close(fd[1]);
+                  close(fd[0]);
                }
-               // char arr[100];
-               // read(fd 100);
                execvp(e->cmd.exe, normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_count));
             }
-            else // parent
-            {
-               wait(NULL);
-               if (pipe_status)
-                  pipe_status = (pipe_status + 1) % 3;
-               // else
-               // {
-               //    close(fd[0]);
-               //    close(fd[1]);
-               //    // close(0);
-               //    // close(1);
-               // }
-            }
+            // parent
+            // wait(NULL); // ISSUE: possibly top-level process is finished earlier than children ones.
+            if (pipe_status)
+               pipe_status = (pipe_status + 1) % 3;
             // printf("pipestatus: %d\n", pipe_status);
          }
 		} else if (e->type == EXPR_TYPE_AND) {
