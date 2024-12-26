@@ -14,9 +14,7 @@ normalize_args(char *cmd, char **args, int args_len)
    char **new_arr = malloc(2 * sizeof(char**) + sizeof(args));
    new_arr[0] = cmd;
    for (int i = 1; i <= args_len; i++)
-   {
       new_arr[i] = args[i - 1];
-   }
    new_arr[args_len + 1] = NULL;
    return new_arr;
 }
@@ -25,29 +23,65 @@ static void
 execute_command_line(const struct command_line *line)
 {
 	/* REPLACE THIS CODE WITH ACTUAL COMMAND EXECUTION */
-
-	assert(line != NULL);
-	
+	// printf("start_execution\n");
 	const struct expr *e = line->head;
+   int pipe_status = 0;
+   int fd[2];
 	while (e != NULL) {
 		if (e->type == EXPR_TYPE_COMMAND) {
-         // printf("start\n");
          if (strcmp((const char *) e->cmd.exe, "cd") == 0)
             chdir(e->cmd.args[0]);
+         else if (strcmp((const char *) e->cmd.exe, "exit") == 0)
+            exit(0);
          else
          {
-            if (fork() == 0)
+            if (e->next != NULL && e->next->type == EXPR_TYPE_PIPE)
+            {
+               pipe(fd);
+               pipe_status = 1;
+            }
+            int pid = fork();
+            if (pid == 0) // child
+            {
+               if (pipe_status == 1) // now &1 points to fd[1]
+               {
+                  dup2(fd[1], 1);
+                  // close(1);
+                  // dup(fd[1]);
+                  close(fd[0]);
+               }
+               else if (pipe_status == 2) // need to point fd[0] to &0
+               {
+                  dup2(fd[0], 0);
+                  // close(0);
+                  // dup(fd[0]);
+                  close(fd[1]);
+               }
+               // char arr[100];
+               // read(fd 100);
                execvp(e->cmd.exe, normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_count));
+            }
+            else // parent
+            {
+               wait(NULL);
+               if (pipe_status)
+                  pipe_status = (pipe_status + 1) % 3;
+               // else
+               // {
+               //    close(fd[0]);
+               //    close(fd[1]);
+               //    // close(0);
+               //    // close(1);
+               // }
+            }
+            // printf("pipestatus: %d\n", pipe_status);
          }
-		} else if (e->type == EXPR_TYPE_PIPE) {
-			printf("\tPIPE\n");
 		} else if (e->type == EXPR_TYPE_AND) {
 			printf("\tAND\n");
 		} else if (e->type == EXPR_TYPE_OR) {
 			printf("\tOR\n");
-		} else {
-			assert(false);
 		}
+      // printf("end_execution\n");
 		e = e->next;
 	}
 }
