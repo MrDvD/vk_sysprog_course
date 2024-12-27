@@ -23,16 +23,17 @@ static void
 execute_command_line(const struct command_line *line)
 {
 	/* REPLACE THIS CODE WITH ACTUAL COMMAND EXECUTION */
-	// printf("start_execution\n");
 	const struct expr *e = line->head;
-   int pipe_status = 0;
-   int fd[2];
+   int pipe_status[2] = {0, 0};
+   int pipe_idx = 0;
+   int fd[2][2];
 	while (e != NULL) {
 		if (e->type == EXPR_TYPE_COMMAND) {
          if (e->next != NULL && e->next->type == EXPR_TYPE_PIPE)
          {
-            pipe(fd);
-            pipe_status = 1;
+            pipe(fd[pipe_idx]);
+            pipe_status[pipe_idx] = 1;
+            pipe_idx = (pipe_idx + 1) % 2;
          } else
          {
             if (strcmp((const char *) e->cmd.exe, "cd") == 0)
@@ -43,34 +44,39 @@ execute_command_line(const struct command_line *line)
          int pid = fork();
          if (pid == 0) // child
          {
-            if (pipe_status == 1) // now &1 points to fd[1]
+            for (int i = 0; i < 2; i++)
             {
-               close(fd[0]);
-               dup2(fd[1], 1);
-               // close(1);
-               // dup(fd[1]);
-               close(fd[1]);
-            }
-            else if (pipe_status == 2) // need to point fd[0] to &0
-            {
-               close(fd[1]);
-               dup2(fd[0], 0);
-               // close(0);
-               // dup(fd[0]);
-               close(fd[0]);
+               if (pipe_status[(pipe_idx + i) % 2] == 1) // now &1 points to fd[1]
+               {
+                  close(fd[(pipe_idx + i) % 2][0]);
+                  dup2(fd[(pipe_idx + i) % 2][1], 1);
+                  // close(1);
+                  // dup(fd[1]);
+                  close(fd[(pipe_idx + i) % 2][1]);
+               }
+               else if (pipe_status[(pipe_idx + i) % 2] == 2) // need to point fd[0] to &0
+               {
+                  close(fd[(pipe_idx + i) % 2][1]);
+                  dup2(fd[(pipe_idx + i) % 2][0], 0);
+                  // close(0);
+                  // dup(fd[0]);
+                  close(fd[(pipe_idx + i) % 2][0]);
+               }
             }
             execvp(e->cmd.exe, normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_count));
          }
          // parent
          // wait(NULL); // ISSUE: possibly top-level process is finished earlier than children ones.
-         if (pipe_status)
-            pipe_status++;
+         for (int i = 0; i < 2; i++)
+         {
+            if (pipe_status[i])
+               pipe_status[i] = (pipe_status[i] + 1) % 3;
+         }
 		} else if (e->type == EXPR_TYPE_AND) {
 			printf("\tAND\n");
 		} else if (e->type == EXPR_TYPE_OR) {
 			printf("\tOR\n");
 		}
-      // printf("end_execution\n");
 		e = e->next;
 	}
 }
