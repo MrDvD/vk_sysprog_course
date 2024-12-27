@@ -64,31 +64,37 @@ execute_command_line(const struct command_line *line)
                close(file_fd);
             } else
             {
-               if (pipe_status[pipe_idx] == 1) // now &1 points to fd[1]
+               for (int i = 0; i < 2; i++)
                {
-                  close(fd[pipe_idx][0]);
-                  dup2(fd[pipe_idx][1], 1);
-                  // close(1);
-                  // dup(fd[1]);
-                  close(fd[pipe_idx][1]);
-               }
-               else if (pipe_status[pipe_idx] == 2) // need to point fd[0] to &0
-               {
-                  close(fd[pipe_idx][1]);
-                  dup2(fd[pipe_idx][0], 0);
-                  // close(0);
-                  // dup(fd[0]);
-                  close(fd[pipe_idx][0]);
+                  if (pipe_status[i] == 1) // now &1 points to fd[1]
+                  {
+                     close(fd[i][0]);
+                     dup2(fd[i][1], 1);
+                     // close(1);
+                     // dup(fd[1]);
+                     close(fd[i][1]);
+                  }
+                  else if (pipe_status[i] == 2) // need to point fd[0] to &0
+                  {
+                     close(fd[i][1]);
+                     dup2(fd[i][0], 0);
+                     // close(0);
+                     // dup(fd[0]);
+                     close(fd[i][0]);
+                  }
                }
             }
             execvp(e->cmd.exe, normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_count));
          }
          // parent
          // printf("waiting for %d\n", pid);
-         if (pipe_status[pipe_idx] == 2)
+         for (int i = 0; i < 2; i++)
          {
-            close(fd[pipe_idx][0]);
-            close(fd[pipe_idx][1]);
+            if (pipe_status[i] == 2)
+            {
+               close(fd[i][0]);
+               close(fd[i][1]);
+            }
          }
          waitpid(pid, NULL, 0); // ISSUE: possibly top-level process is finished earlier than children ones.
          // printf("%d finished execution!\n", pid);
