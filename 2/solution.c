@@ -12,7 +12,7 @@
 char **
 normalize_args(char *cmd, char **args, int args_len)
 {
-   char **new_arr = malloc(2 * sizeof(char**) + sizeof(args));
+   char **new_arr = malloc((2 + args_len) * sizeof(char**));
    new_arr[0] = cmd;
    for (int i = 1; i <= args_len; i++)
       new_arr[i] = args[i - 1];
@@ -41,7 +41,7 @@ execute_command_line(const struct command_line *line)
             if (strcmp((const char *) e->cmd.exe, "cd") == 0)
                chdir(e->cmd.args[0]);
             else if (strcmp((const char *) e->cmd.exe, "exit") == 0)
-               exit(0);
+               exit(e->cmd.arg_count ? atoi(e->cmd.args[0]) : 0);
          }
          int pid = fork();
          if (pid == 0) // child
@@ -82,8 +82,12 @@ execute_command_line(const struct command_line *line)
                   close(fd[i][0]);
                }
             }
-            execvp(e->cmd.exe, normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_count));
-            exit(atoi(e->cmd.args[0])); // for 'exit' command
+            // char **test = normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_count);
+            // for (uint32_t i = 0; i < e->cmd.arg_count + 2; i++) {
+            //    printf("arg #%d: %s\n", i, test[i]);
+            // }
+            execvp(e->cmd.exe, normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_capacity));
+            exit(e->cmd.arg_count ? atoi(e->cmd.args[0]) : 0); // for 'exit' command
          }
          // parent
          // printf("waiting for %d\n", pid);
@@ -96,7 +100,7 @@ execute_command_line(const struct command_line *line)
             }
          }
          if (e->next == NULL)
-            wait(NULL);
+            waitpid(pid, NULL, 0);
          // printf("%d finished execution!\n", pid);
          for (int i = 0; i < 2; i++)
          {
