@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 
 char **
 normalize_args(char *cmd, char **args, int args_len)
@@ -23,17 +24,18 @@ static void
 execute_command_line(const struct command_line *line)
 {
 	/* REPLACE THIS CODE WITH ACTUAL COMMAND EXECUTION */
-	// printf("start_execution\n");
 	const struct expr *e = line->head;
    int pipe_status = 0;
    int fd[2];
+   int file_fd;
+   // printf("out_type: %d\n", line->out_type);
 	while (e != NULL) {
 		if (e->type == EXPR_TYPE_COMMAND) {
          if (e->next != NULL && e->next->type == EXPR_TYPE_PIPE)
          {
             pipe(fd);
             pipe_status = 1;
-         } else
+         } else if ()
          {
             if (strcmp((const char *) e->cmd.exe, "cd") == 0)
                chdir(e->cmd.args[0]);
@@ -43,15 +45,29 @@ execute_command_line(const struct command_line *line)
          int pid = fork();
          if (pid == 0) // child
          {
-            if (pipe_status == 1) // now &1 points to fd[1]
+            if (line->out_type == 1)
+            {
+               file_fd = open(line->out_file, O_WRONLY | O_CREAT, 0777);
+               fsync(1);
+               dup2(file_fd, 1);
+               // close(1);
+               // dup(file_fd);
+               close(file_fd);
+            } else if (line->out_type == 2) {
+               file_fd = open(line->out_file, O_WRONLY | O_CREAT | O_APPEND, 0777);
+               fsync(1);
+               dup2(file_fd, 1);
+               // close(1);
+               // dup(file_fd);
+               close(file_fd);
+            } else if (pipe_status == 1) // now &1 points to fd[1]
             {
                close(fd[0]);
                dup2(fd[1], 1);
                // close(1);
                // dup(fd[1]);
                close(fd[1]);
-            }
-            else if (pipe_status == 2) // need to point fd[0] to &0
+            } else if (pipe_status == 2) // need to point fd[0] to &0
             {
                close(fd[1]);
                dup2(fd[0], 0);
@@ -70,7 +86,6 @@ execute_command_line(const struct command_line *line)
 		} else if (e->type == EXPR_TYPE_OR) {
 			printf("\tOR\n");
 		}
-      // printf("end_execution\n");
 		e = e->next;
 	}
 }
