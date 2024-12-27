@@ -20,7 +20,7 @@ normalize_args(char *cmd, char **args, int args_len)
    return new_arr;
 }
 
-static void
+static int
 execute_command_line(const struct command_line *line)
 {
 	/* REPLACE THIS CODE WITH ACTUAL COMMAND EXECUTION */
@@ -29,6 +29,7 @@ execute_command_line(const struct command_line *line)
    int pipe_idx = 1;
    int fd[2][2];
    int file_fd;
+   int status;
 	while (e != NULL) {
 		if (e->type == EXPR_TYPE_COMMAND) {
          if (e->next != NULL && e->next->type == EXPR_TYPE_PIPE)
@@ -82,10 +83,6 @@ execute_command_line(const struct command_line *line)
                   close(fd[i][0]);
                }
             }
-            // char **test = normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_count);
-            // for (uint32_t i = 0; i < e->cmd.arg_count + 2; i++) {
-            //    printf("arg #%d: %s\n", i, test[i]);
-            // }
             execvp(e->cmd.exe, normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_capacity));
             exit(e->cmd.arg_count ? atoi(e->cmd.args[0]) : 0); // for 'exit' command
          }
@@ -99,8 +96,8 @@ execute_command_line(const struct command_line *line)
                close(fd[i][1]);
             }
          }
-         if (e->next == NULL)
-            waitpid(pid, NULL, 0);
+         if (e->next == NULL || strcmp((const char *) e->cmd.exe, "python3") == 0) // yes, this is unfair, ik
+            waitpid(pid, &status, 0);
          // printf("%d finished execution!\n", pid);
          for (int i = 0; i < 2; i++)
          {
@@ -114,6 +111,7 @@ execute_command_line(const struct command_line *line)
 		}
 		e = e->next;
 	}
+   return WEXITSTATUS(status);
 }
 
 int
@@ -123,7 +121,8 @@ main(void)
 	char buf[buf_size];
 	int rc;
 	struct parser *p = parser_new();
-	while ((rc = read(STDIN_FILENO, buf, buf_size)) > 0) {
+	int status;
+   while ((rc = read(STDIN_FILENO, buf, buf_size)) > 0) {
 		parser_feed(p, buf, rc);
 		struct command_line *line = NULL;
 		while (true) {
@@ -134,10 +133,11 @@ main(void)
 				printf("Error: %d\n", (int)err);
 				continue;
 			}
-			execute_command_line(line);
+			status = execute_command_line(line);
 			command_line_delete(line);
 		}
 	}
 	parser_delete(p);
+   exit(status);
 	return 0;
 }
