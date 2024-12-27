@@ -68,8 +68,11 @@ recreate_dir()
 p = open_new_shell()
 input_cmd = ''
 output_exp = ''
+test_num = 1
 for section in test_sections:
     for case in section.cases:
+        print(test_num)
+        test_num += 1
         input_cmd += case.body
         output_exp += case.output
 try:
