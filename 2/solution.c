@@ -46,7 +46,7 @@ execute_command_line(const struct command_line *line)
          int pid = fork();
          if (pid == 0) // child
          {
-            if (line->out_type == 1)
+            if (line->out_type == 1) // for redirection >
             {
                file_fd = open(line->out_file, O_WRONLY | O_CREAT | O_TRUNC, 0777);
                fsync(1);
@@ -54,7 +54,7 @@ execute_command_line(const struct command_line *line)
                // close(1);
                // dup(file_fd);
                close(file_fd);
-            } else if (line->out_type == 2)
+            } else if (line->out_type == 2) // for redirection >>
             {
                file_fd = open(line->out_file, O_WRONLY | O_CREAT | O_APPEND, 0777);
                fsync(1);
@@ -62,26 +62,24 @@ execute_command_line(const struct command_line *line)
                // close(1);
                // dup(file_fd);
                close(file_fd);
-            } else
+            }
+            for (int i = 0; i < 2; i++)
             {
-               for (int i = 0; i < 2; i++)
+               if (pipe_status[i] == 1) // now &1 points to fd[1]
                {
-                  if (pipe_status[i] == 1) // now &1 points to fd[1]
-                  {
-                     close(fd[i][0]);
-                     dup2(fd[i][1], 1);
-                     // close(1);
-                     // dup(fd[1]);
-                     close(fd[i][1]);
-                  }
-                  else if (pipe_status[i] == 2) // need to point fd[0] to &0
-                  {
-                     close(fd[i][1]);
-                     dup2(fd[i][0], 0);
-                     // close(0);
-                     // dup(fd[0]);
-                     close(fd[i][0]);
-                  }
+                  close(fd[i][0]);
+                  dup2(fd[i][1], 1);
+                  // close(1);
+                  // dup(fd[1]);
+                  close(fd[i][1]);
+               }
+               else if (pipe_status[i] == 2) // need to point fd[0] to &0
+               {
+                  close(fd[i][1]);
+                  dup2(fd[i][0], 0);
+                  // close(0);
+                  // dup(fd[0]);
+                  close(fd[i][0]);
                }
             }
             execvp(e->cmd.exe, normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_count));
