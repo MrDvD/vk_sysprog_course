@@ -95,7 +95,8 @@ execute_command_line(const struct command_line *line)
                close(fd[i][1]);
             }
          }
-         waitpid(pid, NULL, 0);
+         if (e->next == NULL)
+            wait(NULL);
          // printf("%d finished execution!\n", pid);
          for (int i = 0; i < 2; i++)
          {
