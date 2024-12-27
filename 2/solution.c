@@ -33,10 +33,10 @@ execute_command_line(const struct command_line *line)
 		if (e->type == EXPR_TYPE_COMMAND) {
          if (e->next != NULL && e->next->type == EXPR_TYPE_PIPE)
          {
-            pipe_idx = (pipe_idx + 1) % 2;
+            pipe_idx ^= 1;
             pipe(fd[pipe_idx]);
             pipe_status[pipe_idx] = 1;
-         } else
+         } else if (!pipe_status[pipe_idx])
          {
             if (strcmp((const char *) e->cmd.exe, "cd") == 0)
                chdir(e->cmd.args[0]);
@@ -85,6 +85,7 @@ execute_command_line(const struct command_line *line)
                }
             }
             execvp(e->cmd.exe, normalize_args(e->cmd.exe, e->cmd.args, e->cmd.arg_count));
+            exit(atoi(e->cmd.args[0])); // for 'exit' command
          }
          // parent
          // printf("waiting for %d\n", pid);
@@ -96,7 +97,7 @@ execute_command_line(const struct command_line *line)
                close(fd[i][1]);
             }
          }
-         waitpid(pid, NULL, 0); // ISSUE: possibly top-level process is finished earlier than children ones.
+         waitpid(pid, NULL, 0);
          // printf("%d finished execution!\n", pid);
          for (int i = 0; i < 2; i++)
          {
