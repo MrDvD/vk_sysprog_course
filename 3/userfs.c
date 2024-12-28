@@ -3,8 +3,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-// #include <stdio.h> // to remove
-
 enum {
 	BLOCK_SIZE = 512,
 	MAX_FILE_SIZE = 1024 * 1024 * 100,
@@ -54,6 +52,7 @@ struct filedesc {
    struct block *curr_block;
    int block_number;
    int offset;
+   int mode;
 };
 
 /**
@@ -162,6 +161,10 @@ ufs_open(const char *filename, int flags)
             file_descriptors[fd]->curr_block = curr_file->first_block;
             file_descriptors[fd]->block_number = 0;
             file_descriptors[fd]->offset = 0;
+            if (!(flags & 14))
+               file_descriptors[fd]->mode = 8;
+            else
+               file_descriptors[fd]->mode = flags;
             return ++fd;
          }
          if (curr_file->next == NULL)
@@ -202,6 +205,10 @@ ufs_open(const char *filename, int flags)
       file_descriptors[fd]->curr_block = file_descriptors[fd]->file->first_block;
       file_descriptors[fd]->block_number = 0;
       file_descriptors[fd]->offset = 0;
+      if (!(flags & 14))
+         file_descriptors[fd]->mode = 8;
+      else
+         file_descriptors[fd]->mode = flags;
       return fd + 1;
    } else
    {
@@ -219,10 +226,22 @@ ufs_write(int fd, const char *buf, size_t size)
       ufs_error_code = UFS_ERR_NO_FILE;
 	   return -1;
    }
+   if (!(file_descriptors[real_fd]->mode & 12))
+   {
+      ufs_error_code = UFS_ERR_NO_PERMISSION;
+      return -1;
+   }
    if (file_descriptors[real_fd]->block_number * BLOCK_SIZE + file_descriptors[real_fd]->offset + size > MAX_FILE_SIZE)
    {
       ufs_error_code = UFS_ERR_NO_MEM;
       return -1;
+   }
+   int pointer = file_descriptors[real_fd]->block_number * BLOCK_SIZE + file_descriptors[real_fd]->offset;
+   if (pointer > file_descriptors[real_fd]->file->size)
+   {
+      file_descriptors[real_fd]->block_number = file_descriptors[real_fd]->file->size / BLOCK_SIZE;
+      file_descriptors[real_fd]->offset = file_descriptors[real_fd]->file->size % BLOCK_SIZE;
+      file_descriptors[real_fd]->curr_block = file_descriptors[real_fd]->file->last_block;
    }
    for (size_t i = 0; i < size; i++)
    {
@@ -260,6 +279,11 @@ ufs_read(int fd, char *buf, size_t size)
    {
       ufs_error_code = UFS_ERR_NO_FILE;
 	   return -1;
+   }
+   if (!(file_descriptors[real_fd]->mode & 10))
+   {
+      ufs_error_code = UFS_ERR_NO_PERMISSION;
+      return -1;
    }
    size_t i = file_descriptors[real_fd]->block_number * BLOCK_SIZE + file_descriptors[real_fd]->offset;
    size_t start = i;
@@ -334,11 +358,43 @@ ufs_delete(const char *filename)
 int
 ufs_resize(int fd, size_t new_size)
 {
-	/* IMPLEMENT THIS FUNCTION */
-	(void)fd;
-	(void)new_size;
-	ufs_error_code = UFS_ERR_NOT_IMPLEMENTED;
-	return -1;
+   int real_fd = fd - 1;
+   if (!ufs_fd_exists(real_fd))
+   {
+      ufs_error_code = UFS_ERR_NO_FILE;
+	   return -1;
+   }
+   if (!(file_descriptors[real_fd]->mode & 12))
+   {
+      ufs_error_code = UFS_ERR_NO_PERMISSION;
+      return -1;
+   }
+   if (file_descriptors[real_fd]->file->size < (int) new_size)
+   {
+      int new_blocks = (new_size - file_descriptors[real_fd]->file->size + file_descriptors[real_fd]->file->size % BLOCK_SIZE - 1) / BLOCK_SIZE;
+      for (int i = 0; i < new_blocks; i++)
+      {
+         struct block* new_block = ufs_init_block();
+         new_block->prev = file_descriptors[real_fd]->file->last_block;
+         file_descriptors[real_fd]->file->last_block->next = new_block;
+         file_descriptors[real_fd]->file->last_block = new_block;
+      }
+   } else
+   {
+      int block_count = new_size / BLOCK_SIZE;
+      struct block *last_block = file_descriptors[real_fd]->file->first_block;
+      for (int i = 0; i < block_count; i++)
+         last_block = last_block->next;
+      last_block->next = NULL;
+      int i = BLOCK_SIZE - 1;
+      while (i >= ((int) new_size % BLOCK_SIZE)) {
+         last_block->memory[i] = 0;
+         i--;
+      }
+      file_descriptors[real_fd]->file->last_block = last_block;
+   }
+   file_descriptors[real_fd]->file->size = new_size;
+   return 0;
 }
 
 #endif
